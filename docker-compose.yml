@@ -1,0 +1,125 @@
+# Commercial RAG System - Docker Compose
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  db:
+    image: postgres:15-alpine
+    container_name: commercial-rag-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-raguser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-commercial_rag}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-raguser}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ============================================
+  # FastAPI Backend
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: commercial-rag-backend
+    command: [ "/app/docker-entrypoint.sh", "backend" ]
+    environment:
+      # Database
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-raguser}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-commercial_rag}
+      DATABASE_URL: postgresql://${DB_USER:-raguser}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-commercial_rag}
+
+      # API Keys
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+      # JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_MINUTES: 1440
+
+      # Admin
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@empresa.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+
+      # Claude Pricing
+      CLAUDE_INPUT_PRICE_PER_MILLION: ${CLAUDE_INPUT_PRICE_PER_MILLION:-3.0}
+      CLAUDE_OUTPUT_PRICE_PER_MILLION: ${CLAUDE_OUTPUT_PRICE_PER_MILLION:-15.0}
+
+      # App
+      BACKEND_URL: http://backend:8000
+      FRONTEND_URL: http://frontend:8501
+
+    volumes:
+      - ./data/documents:/app/data/documents
+      - ./data/chroma_db:/app/data/chroma_db
+      - ./data/logs:/app/data/logs
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ============================================
+  # Streamlit Frontend
+  # ============================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: commercial-rag-frontend
+    command: [ "/app/docker-entrypoint.sh", "frontend" ]
+    environment:
+      BACKEND_URL: http://backend:8000
+      PYTHONPATH: /app
+
+    ports:
+      - "8501:8501"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  rag-network:
+    driver: bridge
