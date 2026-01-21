@@ -274,7 +274,7 @@ Este proyecto está bajo la licencia MIT. Ver [LICENSE](LICENSE) para más detal
 
 ## 📧 Contacto
 
-Germán Talón Ramírez - [@tu_twitter](https://twitter.com/tu_twitter)
+Germán Talón Ramírez
 
 Project Link: [https://github.com/gertalonr/commercial-rag-system](https://github.com/gertalonr/commercial-rag-system)
 
